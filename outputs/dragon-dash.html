@@ -16,11 +16,30 @@
 body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b1024;color:#fff;font-family:Nunito,system-ui,sans-serif;overflow:hidden}
 #wrap{position:relative;width:min(96vw,1100px);aspect-ratio:16/9;border:3px solid #8c76ff;border-radius:18px;overflow:hidden;box-shadow:0 18px 70px #070a20}
 html.playing,html.playing *{cursor:none !important}
+html.playing #touch-controls,html.playing #touch-controls *{cursor:default !important}
 canvas{width:100%;height:100%;display:block;touch-action:none}
 #hud{position:absolute;inset:0;padding:14px 16px;pointer-events:none;font-weight:800;text-shadow:0 2px 0 #3e338d;display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;font-size:clamp(11px,1.6vw,18px);opacity:0;transition:opacity .25s ease}
 #hud span{background:#5746b5cc;border-radius:999px;padding:5px 12px;height:max-content;transition:transform .12s ease;white-space:nowrap}
 #hud span.pop{transform:scale(1.14)}
 #help{position:absolute;bottom:14px;left:0;right:0;text-align:center;font-weight:800;text-shadow:0 2px 2px #1d1744;pointer-events:none;font-size:clamp(11px,1.5vw,15px);opacity:0;transition:opacity .25s ease}
+#touch-controls{display:none;position:absolute;inset:0;z-index:4;pointer-events:none}
+#touch-controls.on{display:block}
+#touch-controls .pad{position:absolute;bottom:12px;display:flex;gap:10px;pointer-events:auto}
+#touch-controls .pad-move{left:12px}
+#touch-controls .pad-act{right:12px}
+#touch-controls button{
+  margin:0;width:64px;height:64px;border:2px solid #c7b8ffaa;border-radius:18px;
+  background:#32268acc;color:#ffe77a;font-family:Fredoka,Nunito,sans-serif;font-size:18px;font-weight:700;
+  box-shadow:0 4px 0 #1a1458aa;touch-action:none;user-select:none;-webkit-user-select:none;
+  padding:0;letter-spacing:0;line-height:1;opacity:.88
+}
+#touch-controls button:active,#touch-controls button.held{transform:translateY(2px);box-shadow:0 2px 0 #1a1458aa;filter:brightness(1.15);opacity:1}
+#touch-controls button.wide{width:76px;font-size:14px}
+@media (max-width:700px){
+  #touch-controls button{width:58px;height:58px;border-radius:16px;font-size:16px}
+  #touch-controls button.wide{width:68px;font-size:13px}
+  #help{display:none}
+}
 #card{position:absolute;inset:0;display:grid;place-items:center;padding:18px;text-align:center;background:
   radial-gradient(circle at 50% 18%, #ffe7a033 0%, transparent 28%),
   radial-gradient(ellipse at 50% 120%, #3a2a8a88 0%, transparent 55%),
@@ -79,6 +98,16 @@ button:active{transform:translateY(2px);box-shadow:0 2px 0 #c49a2a}
 <span id="lives">HEARTS ♥♥♥</span>
 </div>
 <div id="help">A / D or ← / → to run &nbsp; · &nbsp; W / ↑ / SPACE to jump (again in air = double jump) &nbsp; · &nbsp; Click / F / X to breathe fire &nbsp; · &nbsp; M mute music &nbsp; · &nbsp; R restart</div>
+<div id="touch-controls" aria-hidden="true">
+  <div class="pad pad-move">
+    <button type="button" data-act="left" aria-label="Move left">◀</button>
+    <button type="button" data-act="right" aria-label="Move right">▶</button>
+  </div>
+  <div class="pad pad-act">
+    <button type="button" class="wide" data-act="jump" aria-label="Jump">JUMP</button>
+    <button type="button" class="wide" data-act="fire" aria-label="Fire">FIRE</button>
+  </div>
+</div>
 <div id="card" class="show">
   <section class="panel title-panel">
     <div class="moon" aria-hidden="true"></div>
@@ -101,6 +130,9 @@ const W = c.width, H = c.height;
 const K = {};
 const jumpKeys = new Set(['ArrowUp', 'KeyW', 'Space']);
 let mouseFire = false;
+const touchPad = { left: false, right: false, jump: false, fire: false };
+const touchPointers = new Map();
+const wantsTouchUi = matchMedia('(pointer: coarse)').matches || navigator.maxTouchPoints > 0 || 'ontouchstart' in window;
 
 // Feel tuning
 const COYOTE = 9;       // frames after leaving ground where jump still works
@@ -343,7 +375,7 @@ addEventListener('keyup', e => { K[e.code] = false; });
 // Mouse / touch fire — document-wide so holding click still works off-canvas
 function setMouseFire(on) { mouseFire = !!on; }
 function pointerOnUi(e) {
-  return e.target && e.target.closest && e.target.closest('#card button, #card a, button');
+  return e.target && e.target.closest && e.target.closest('#card, #touch-controls');
 }
 addEventListener('pointerdown', e => {
   if (e.button !== 0 || !game || pointerOnUi(e)) return;
@@ -354,8 +386,10 @@ addEventListener('pointerup', e => {
   if (e.button === 0) setMouseFire(false);
 });
 addEventListener('pointercancel', () => setMouseFire(false));
-addEventListener('blur', () => setMouseFire(false));
-// Stop fire if all buttons released (covers leaving the window mid-click)
+addEventListener('blur', () => {
+  setMouseFire(false);
+  clearTouchPad();
+});
 addEventListener('pointermove', e => {
   if (!game) return;
   if (mouseFire && (e.buttons & 1) === 0) setMouseFire(false);
@@ -363,6 +397,68 @@ addEventListener('pointermove', e => {
 document.querySelector('#wrap').addEventListener('contextmenu', e => {
   if (game) e.preventDefault();
 });
+
+function clearTouchPad() {
+  touchPad.left = touchPad.right = touchPad.jump = touchPad.fire = false;
+  touchPointers.clear();
+  document.querySelectorAll('#touch-controls button.held').forEach(b => b.classList.remove('held'));
+}
+
+function setTouchAct(act, on) {
+  if (!act) return;
+  touchPad[act] = !!on;
+  if (on && act === 'jump' && game && hero) hero.jumpBuf = JUMP_BUFFER;
+}
+
+function bindTouchControls() {
+  const root = document.querySelector('#touch-controls');
+  if (!root) return;
+  root.querySelectorAll('button[data-act]').forEach(btn => {
+    const act = btn.dataset.act;
+    btn.addEventListener('pointerdown', e => {
+      if (e.button !== 0 || !game) return;
+      e.preventDefault();
+      e.stopPropagation();
+      try { btn.setPointerCapture(e.pointerId); } catch (_) {}
+      touchPointers.set(e.pointerId, act);
+      setTouchAct(act, true);
+      btn.classList.add('held');
+    });
+    btn.addEventListener('pointerup', e => {
+      const a = touchPointers.get(e.pointerId) || act;
+      touchPointers.delete(e.pointerId);
+      setTouchAct(a, false);
+      btn.classList.remove('held');
+    });
+    btn.addEventListener('pointercancel', e => {
+      const a = touchPointers.get(e.pointerId) || act;
+      touchPointers.delete(e.pointerId);
+      setTouchAct(a, false);
+      btn.classList.remove('held');
+    });
+    btn.addEventListener('lostpointercapture', e => {
+      if (!touchPointers.has(e.pointerId)) return;
+      const a = touchPointers.get(e.pointerId);
+      touchPointers.delete(e.pointerId);
+      setTouchAct(a, false);
+      btn.classList.remove('held');
+    });
+  });
+}
+bindTouchControls();
+if (wantsTouchUi) {
+  const hint = document.querySelector('.panel .hint');
+  if (hint) hint.textContent = 'On-screen controls · Jump · Double jump · Fire';
+}
+
+function setTouchControlsVisible(on) {
+  const el = document.querySelector('#touch-controls');
+  if (!el) return;
+  const show = !!(on && wantsTouchUi);
+  el.classList.toggle('on', show);
+  el.setAttribute('aria-hidden', show ? 'false' : 'true');
+  if (!show) clearTouchPad();
+}
 
 document.querySelector('#play').onclick = start;
 
@@ -504,7 +600,8 @@ function loadStage(index, opts = {}) {
 
 function setChrome(on) {
   document.querySelector('#hud').style.opacity = on ? '1' : '0';
-  document.querySelector('#help').style.opacity = on ? '1' : '0';
+  document.querySelector('#help').style.opacity = on && !wantsTouchUi ? '1' : '0';
+  setTouchControlsVisible(on);
 }
 
 function showCard(html, onPlay) {
@@ -516,6 +613,7 @@ function showCard(html, onPlay) {
   card.style.display = 'grid';
   document.documentElement.classList.remove('playing');
   setMouseFire(false);
+  clearTouchPad();
   setChrome(false);
   const btn = document.querySelector('#play');
   if (btn && onPlay) btn.onclick = onPlay;
@@ -634,10 +732,10 @@ function update(d) {
   shake = Math.max(0, shake - d * 1.2);
   if (!game) return;
 
-  const left = K.ArrowLeft || K.KeyA;
-  const right = K.ArrowRight || K.KeyD;
-  const jump = K.ArrowUp || K.KeyW || K.Space;
-  const fire = mouseFire || K.KeyF || K.KeyX;
+  const left = K.ArrowLeft || K.KeyA || touchPad.left;
+  const right = K.ArrowRight || K.KeyD || touchPad.right;
+  const jump = K.ArrowUp || K.KeyW || K.Space || touchPad.jump;
+  const fire = mouseFire || touchPad.fire || K.KeyF || K.KeyX;
 
   // Horizontal feel: snappier accel, firmer top speed
   if (left) hero.vx -= ACCEL * d;
