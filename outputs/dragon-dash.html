@@ -210,7 +210,7 @@ function hash(n) {
 }
 
 let game, last, cam, camY, shake, hero, gems, spikes, flag, score, lives, points;
-let particles, foes, fireballs, movers, checkpoints, checkpoint, bats;
+let particles, foes, fireballs, movers, checkpoints, checkpoint, bats, slimes, slimeShots;
 let gateOpen, gateFlash, gateDenyCool, gateHint, fireflies, stageName;
 let run = { gems: 0, perfects: 0, hits: 0, t0: 0 };
 
@@ -243,8 +243,14 @@ const STAGES = [
     ],
     foes: [
       { x: 980, y: 498, vx: 1.05, min: 860, max: 1140 },
-      { x: 3080, y: 408, vx: -1.25, min: 3020, max: 3140 },
-      { x: 3620, y: 423, vx: 1.3, min: 3540, max: 3680 }
+      { x: 3080, y: 408, vx: -1.25, min: 3020, max: 3140, armored: true },
+      { x: 3620, y: 423, vx: 1.3, min: 3540, max: 3680, armored: true }
+    ],
+    // Hop-slimes — bounce patrols that fill quieter stretches
+    slimes: [
+      { x: 1860, ground: 455, min: 1800, max: 1980, face: 1 },
+      { x: 2340, ground: 545, min: 2220, max: 2550, face: -1, spitter: true },
+      { x: 3840, ground: 400, min: 3770, max: 3900, face: 1, spitter: true }
     ],
     flag: { x: 4180, y: 395 },
     crumbles: [],
@@ -315,7 +321,11 @@ const STAGES = [
     ],
     foes: [
       { x: 1320, y: 433, vx: 1.15, min: 1220, max: 1420 },
-      { x: 2780, y: 403, vx: -1.2, min: 2720, max: 2880 }
+      { x: 2780, y: 403, vx: -1.2, min: 2720, max: 2880, armored: true }
+    ],
+    slimes: [
+      { x: 1900, ground: 360, min: 1860, max: 1980, face: 1, spitter: true },
+      { x: 2440, ground: 380, min: 2420, max: 2560, face: -1 }
     ],
     flag: { x: 3480, y: 355 }
   }
@@ -433,7 +443,35 @@ function loadStage(index, opts = {}) {
   movers = st.movers.map(m => ({ ...m }));
   checkpoints = st.checkpoints.map(cp => ({ x: cp.x, y: cp.y, active: false }));
   bats = st.bats.map(b => ({ ...b, alive: true }));
-  foes = st.foes.map(e => ({ ...e, alive: true }));
+  foes = st.foes.map(e => ({
+    ...e,
+    alive: true,
+    armored: !!e.armored,
+    hp: e.armored ? 2 : 1,
+    flash: 0
+  }));
+  slimes = (st.slimes || []).map(s => ({
+    x: s.x,
+    y: s.ground - 18,
+    ground: s.ground,
+    min: s.min,
+    max: s.max,
+    face: s.face || 1,
+    vx: 0,
+    vy: 0,
+    hop: 20 + Math.random() * 30,
+    on: true,
+    alive: true,
+    squash: 1,
+    stretch: 1,
+    blink: Math.random() * 40,
+    flash: 0,
+    spitter: !!s.spitter,
+    hp: s.spitter ? 2 : 1,
+    shootCool: s.spitter ? 40 + Math.random() * 40 : 0,
+    charge: 0
+  }));
+  slimeShots = [];
   flag = { x: st.flag.x, y: st.flag.y };
   checkpoint = { x: st.start.x, y: st.start.y };
   score = 0;
@@ -744,6 +782,7 @@ function update(d) {
   foes.forEach(e => {
     if (!e.alive) return;
     e.anim = (e.anim || 0) + d * .16;
+    e.flash = Math.max(0, (e.flash || 0) - d);
     e.x += e.vx * d;
     if (e.x < e.min || e.x > e.max) e.vx *= -1;
   });
@@ -752,14 +791,25 @@ function update(d) {
     for (let j = foes.length - 1; j >= 0; j--) {
       const f = fireballs[i], e = foes[j];
       if (e.alive && Math.hypot(f.x - e.x, e.y + 22 - f.y) < 38) {
-        e.alive = false;
-        points += 100;
         fireballs.splice(i, 1);
-        burst(e.x, e.y + 22, '#ffb448', 26, { circle: true, vmax: 5.5 });
-        burst(e.x, e.y + 22, '#ff6c83', 10, { vmax: 3 });
-        shake = Math.max(shake, 5);
-        chord([[150, .14, 'sawtooth', .05, 70], [90, .18, 'triangle', .03, 40]]);
-        hudPop('#points');
+        if (e.hp > 1) {
+          e.hp--;
+          e.flash = 20;
+          e.vx *= -1;
+          burst(e.x, e.y + 18, '#d7e2f5', 16, { circle: true, vmax: 4.2 });
+          burst(e.x, e.y + 18, '#8aa0c0', 8, { vmax: 2.5 });
+          shake = Math.max(shake, 3);
+          sfx(320, .08, 'square', .035, 140);
+          sfx(180, .1, 'triangle', .03, 80);
+        } else {
+          e.alive = false;
+          points += e.armored ? 200 : 100;
+          burst(e.x, e.y + 22, '#ffb448', 26, { circle: true, vmax: 5.5 });
+          burst(e.x, e.y + 22, e.armored ? '#c5d0e8' : '#ff6c83', 12, { vmax: 3.2 });
+          shake = Math.max(shake, 5);
+          chord([[150, .14, 'sawtooth', .05, 70], [90, .18, 'triangle', .03, 40]]);
+          hudPop('#points');
+        }
         break;
       }
     }
@@ -781,9 +831,129 @@ function update(d) {
     }
   }
 
+  // Hop-slimes (+ spitters)
+  slimes.forEach(s => {
+    if (!s.alive) return;
+    s.flash = Math.max(0, (s.flash || 0) - d);
+    s.blink += d;
+    s.squash += (1 - s.squash) * .2 * d;
+    s.stretch += (1 - s.stretch) * .2 * d;
+    if (s.on) {
+      s.hop -= d;
+      s.vx *= Math.pow(0.8, d);
+      if (s.hop <= 0 && !(s.spitter && s.charge > 0)) {
+        s.on = false;
+        s.vy = -9.2;
+        s.vx = s.face * 2.8;
+        s.hop = 38 + Math.random() * 28;
+        s.squash = 0.78;
+        s.stretch = 1.28;
+        sfx(240, .04, 'sine', .02, 320);
+      }
+    } else {
+      s.vy += 0.62 * d;
+      s.x += s.vx * d;
+      s.y += s.vy * d;
+      if (s.x < s.min) { s.x = s.min; s.face = 1; s.vx = Math.abs(s.vx); }
+      if (s.x > s.max) { s.x = s.max; s.face = -1; s.vx = -Math.abs(s.vx); }
+      if (s.y >= s.ground - 18 && s.vy > 0) {
+        s.y = s.ground - 18;
+        s.vy = 0;
+        s.vx *= 0.4;
+        s.on = true;
+        s.squash = 1.28;
+        s.stretch = 0.72;
+        burst(s.x, s.ground, '#9d8cff', 5, { angle: -1.57, fan: 2.4, vmin: .4, vmax: 1.6, grav: .08, size: .7, circle: true });
+      }
+    }
+    if (s.spitter && s.on) {
+      s.face = hero.x >= s.x ? 1 : -1;
+      const dx = hero.x + hero.w / 2 - s.x;
+      const dy = hero.y + hero.h / 2 - (s.y - 8);
+      const dist = Math.hypot(dx, dy);
+      if (s.charge > 0) {
+        s.charge -= d;
+        s.squash = 1.22;
+        s.stretch = 0.8;
+        if (s.charge <= 0 && dist > 30) {
+          const ang = Math.atan2(dy, dx);
+          slimeShots.push({
+            x: s.x + Math.cos(ang) * 14,
+            y: s.y - 8 + Math.sin(ang) * 8,
+            vx: Math.cos(ang) * 4.4,
+            vy: Math.sin(ang) * 4.4,
+            t: 100
+          });
+          s.shootCool = 78 + Math.random() * 36;
+          s.squash = 0.85;
+          s.stretch = 1.15;
+          burst(s.x, s.y - 10, '#ff7ad2', 6, { circle: true, vmin: .5, vmax: 2 });
+          sfx(520, .07, 'square', .03, 280);
+        }
+      } else {
+        s.shootCool -= d;
+        if (s.shootCool <= 0 && dist < 460 && dist > 40) {
+          s.charge = 16;
+          sfx(400, .05, 'sine', .02, 560);
+        }
+      }
+    }
+  });
+
+  slimeShots = slimeShots.filter(shot => {
+    shot.x += shot.vx * d;
+    shot.y += shot.vy * d;
+    shot.t -= d;
+    if (hero.inv <= 0 && Math.hypot(hero.x + hero.w / 2 - shot.x, hero.y + hero.h / 2 - shot.y) < 22) {
+      hurt();
+      burst(shot.x, shot.y, '#ff7ad2', 10, { circle: true, vmax: 3 });
+      return false;
+    }
+    return shot.t > 0 && shot.y < H + 40 && shot.x > cam - 80 && shot.x < cam + W + 80;
+  });
+
+  for (let i = fireballs.length - 1; i >= 0; i--) {
+    for (let j = slimes.length - 1; j >= 0; j--) {
+      const f = fireballs[i], s = slimes[j];
+      if (s.alive && Math.hypot(f.x - s.x, f.y - (s.y - 6)) < 30) {
+        fireballs.splice(i, 1);
+        if (s.hp > 1) {
+          s.hp--;
+          s.flash = 18;
+          s.vx = (hero.x < s.x ? 1 : -1) * 2;
+          burst(s.x, s.y - 6, '#ff9ad8', 12, { circle: true, vmax: 3.5 });
+          sfx(300, .08, 'triangle', .03, 140);
+        } else {
+          s.alive = false;
+          points += s.spitter ? 175 : 125;
+          burst(s.x, s.y - 6, s.spitter ? '#ff7ad2' : '#b8a0ff', 22, { circle: true, vmax: 4.5 });
+          burst(s.x, s.y - 6, '#7ee0c8', 10, { vmax: 3 });
+          shake = Math.max(shake, 3);
+          sfx(360, .1, 'triangle', .04, 120);
+          hudPop('#points');
+        }
+        break;
+      }
+    }
+  }
+
+  // Fire can also pop slime shots mid-air
+  for (let i = fireballs.length - 1; i >= 0; i--) {
+    for (let j = slimeShots.length - 1; j >= 0; j--) {
+      const f = fireballs[i], shot = slimeShots[j];
+      if (Math.hypot(f.x - shot.x, f.y - shot.y) < 18) {
+        fireballs.splice(i, 1);
+        slimeShots.splice(j, 1);
+        burst(shot.x, shot.y, '#ffc6ef', 8, { circle: true, vmax: 2.8 });
+        break;
+      }
+    }
+  }
+
   if (hero.inv <= 0 && (
     foes.some(e => e.alive && hero.x + hero.w > e.x - 20 && hero.x < e.x + 22 && hero.y + hero.h > e.y && hero.y < e.y + 42) ||
-    bats.some(b => b.alive && Math.hypot(hero.x + hero.w / 2 - b.x, hero.y + hero.h / 2 - b.y) < 35)
+    bats.some(b => b.alive && Math.hypot(hero.x + hero.w / 2 - b.x, hero.y + hero.h / 2 - b.y) < 35) ||
+    slimes.some(s => s.alive && Math.hypot(hero.x + hero.w / 2 - s.x, hero.y + hero.h / 2 - (s.y - 8)) < 32)
   )) hurt();
 
   if (hero.inv <= 0 && (hero.y > H + 90 || hero.x < cam - 160)) hurt();
@@ -986,6 +1156,131 @@ function finish() {
       start
     );
   }
+}
+
+// Steel tint of the real imp frame — recolor opaque pixels only (no full-frame fills)
+const armoredImpCache = {};
+function drawArmoredImp(e, sourceX) {
+  if (!imp.complete || !imp.naturalWidth) return;
+  const intact = e.hp > 1;
+  const key = sourceX + (intact ? ':on' : ':off');
+  let sheet = armoredImpCache[key];
+  if (!sheet) {
+    const w = 66, h = 78;
+    sheet = document.createElement('canvas');
+    sheet.width = w;
+    sheet.height = h;
+    const o = sheet.getContext('2d', { willReadFrequently: true });
+    o.drawImage(imp, sourceX, 150, 430, 600, 0, 0, w, h);
+    const img = o.getImageData(0, 0, w, h);
+    const p = img.data;
+    for (let i = 0; i < p.length; i += 4) {
+      const a = p[i + 3];
+      if (a < 16) { p[i + 3] = 0; continue; } // keep empty pixels fully clear
+      const r = p[i], g = p[i + 1], b = p[i + 2];
+      const lum = 0.3 * r + 0.5 * g + 0.2 * b;
+      if (intact) {
+        p[i]     = Math.min(255, lum * 0.55 + r * 0.2 + 36);
+        p[i + 1] = Math.min(255, lum * 0.65 + g * 0.15 + 58);
+        p[i + 2] = Math.min(255, lum * 0.85 + b * 0.1 + 88);
+      } else {
+        p[i]     = Math.min(255, lum * 0.45 + r * 0.4 + 40);
+        p[i + 1] = Math.min(255, lum * 0.3 + g * 0.25 + 16);
+        p[i + 2] = Math.min(255, lum * 0.28 + b * 0.2 + 14);
+      }
+    }
+    o.putImageData(img, 0, 0);
+    armoredImpCache[key] = sheet;
+  }
+  ctx.shadowBlur = 0;
+  ctx.shadowColor = 'transparent';
+  ctx.drawImage(sheet, -33, -64);
+}
+
+function drawSlime(s) {
+  const spit = s.spitter;
+  ctx.save();
+  ctx.translate(s.x, s.y);
+  ctx.scale(s.squash * (s.face >= 0 ? 1 : -1), s.stretch);
+  // Contact shadow
+  ctx.fillStyle = '#140c2888';
+  ctx.beginPath();
+  ctx.ellipse(0, 16, spit ? 18 : 16, 4, 0, 0, 7);
+  ctx.fill();
+  // Body
+  const body = ctx.createRadialGradient(-4, -10, 2, 0, 0, spit ? 24 : 22);
+  if (spit) {
+    body.addColorStop(0, '#ffe0f5');
+    body.addColorStop(0.3, '#ff7ad2');
+    body.addColorStop(0.7, '#b03a9a');
+    body.addColorStop(1, '#5a1a58');
+  } else {
+    body.addColorStop(0, '#e5d7ff');
+    body.addColorStop(0.35, '#9b7dff');
+    body.addColorStop(0.75, '#5a3db8');
+    body.addColorStop(1, '#2f226e');
+  }
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, spit ? 20 : 18, spit ? 16 : 15, 0, 0, 7);
+  ctx.fill();
+  // Bottom squash pad
+  ctx.fillStyle = spit ? '#7a2870cc' : '#4a339ecc';
+  ctx.beginPath();
+  ctx.ellipse(0, 10, spit ? 16 : 15, 5, 0, 0, 7);
+  ctx.fill();
+  // Spitter crest
+  if (spit) {
+    ctx.fillStyle = '#ffe27a';
+    ctx.beginPath();
+    ctx.moveTo(-6, -14);
+    ctx.lineTo(0, -24);
+    ctx.lineTo(6, -14);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#ff9ad8';
+    ctx.beginPath();
+    ctx.ellipse(0, -12, 5, 3, 0, 0, 7);
+    ctx.fill();
+  }
+  // Gloss
+  ctx.fillStyle = '#ffffff55';
+  ctx.beginPath();
+  ctx.ellipse(-5, -7, 7, 4, -0.5, 0, 7);
+  ctx.fill();
+  // Eyes
+  const blink = (s.blink % 55) > 52;
+  ctx.fillStyle = '#1a1440';
+  if (blink) {
+    ctx.fillRect(-7, -3, 5, 1.5);
+    ctx.fillRect(3, -3, 5, 1.5);
+  } else {
+    ctx.beginPath();
+    ctx.arc(-5, -2, spit ? 3.6 : 3.2, 0, 7);
+    ctx.arc(5, -2, spit ? 3.6 : 3.2, 0, 7);
+    ctx.fill();
+    ctx.fillStyle = spit ? '#ffd0ef' : '#fff';
+    ctx.beginPath();
+    ctx.arc(-4, -3, 1.1, 0, 7);
+    ctx.arc(6, -3, 1.1, 0, 7);
+    ctx.fill();
+  }
+  // Charge glow / cheeks
+  if (spit && s.charge > 0) {
+    ctx.fillStyle = '#fff';
+    ctx.globalAlpha = 0.35 + (s.charge / 16) * 0.45;
+    ctx.beginPath();
+    ctx.ellipse(0, 4, 6, 4, 0, 0, 7);
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  } else {
+    ctx.fillStyle = spit ? '#ff9ad888' : '#7ee0c888';
+    ctx.beginPath();
+    ctx.arc(-11, 2, 2, 0, 7);
+    ctx.arc(11, 2, 2, 0, 7);
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 function drawPlatform(px, py, pw, ph) {
@@ -1298,6 +1593,34 @@ function draw() {
     ctx.restore();
   });
 
+  slimes.forEach(s => {
+    if (!s.alive) return;
+    ctx.save();
+    if (s.flash > 0) {
+      const boost = 1 + Math.min(0.8, s.flash / 14);
+      ctx.filter = 'brightness(' + boost + ')';
+    }
+    drawSlime(s);
+    ctx.filter = 'none';
+    ctx.restore();
+  });
+
+  slimeShots.forEach(shot => {
+    ctx.save();
+    ctx.translate(shot.x, shot.y);
+    ctx.shadowBlur = 12;
+    ctx.shadowColor = '#ff7ad2';
+    const g = ctx.createRadialGradient(0, 0, 1, 0, 0, 8);
+    g.addColorStop(0, '#fff');
+    g.addColorStop(0.4, '#ff9ad8');
+    g.addColorStop(1, '#c43a9a00');
+    ctx.fillStyle = g;
+    ctx.beginPath();
+    ctx.arc(0, 0, 7, 0, 7);
+    ctx.fill();
+    ctx.restore();
+  });
+
   foes.forEach(e => {
     if (!e.alive) return;
     ctx.save();
@@ -1305,13 +1628,22 @@ function draw() {
     const sourceX = [0, 430, 850, 430][frame];
     ctx.translate(e.x, e.y + 40);
     ctx.scale(e.vx > 0 ? 1 : -1, 1);
-    if (imp.complete && imp.naturalWidth) ctx.drawImage(imp, sourceX, 150, 430, 600, -33, -64, 66, 78);
-    else {
-      ctx.fillStyle = '#b94f63';
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
+    if (e.flash > 0) {
+      const boost = 1 + Math.min(0.9, e.flash / 14);
+      ctx.filter = 'brightness(' + boost + ') saturate(' + (e.armored && e.hp <= 1 ? 1.25 : 0.85) + ')';
+    }
+    if (imp.complete && imp.naturalWidth) {
+      if (e.armored) drawArmoredImp(e, sourceX);
+      else ctx.drawImage(imp, sourceX, 150, 430, 600, -33, -64, 66, 78);
+    } else {
+      ctx.fillStyle = e.armored ? '#7a8fb8' : '#b94f63';
       ctx.beginPath();
       ctx.arc(0, 0, 18, 0, 7);
       ctx.fill();
     }
+    ctx.filter = 'none';
     ctx.restore();
   });
 
