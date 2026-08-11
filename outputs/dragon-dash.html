@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Dragon Dash</title>
 <link rel="icon" href="favicon.ico" sizes="any">
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
@@ -13,7 +13,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@600;700;800&display=swap" rel="stylesheet">
 <style>
 *{box-sizing:border-box}
-body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b1024;color:#fff;font-family:Nunito,system-ui,sans-serif;overflow:hidden}
+html,body{height:100%}
+body{margin:0;min-height:100vh;min-height:100dvh;display:grid;place-items:center;background:#0b1024;color:#fff;font-family:Nunito,system-ui,sans-serif;overflow:hidden}
 #wrap{position:relative;width:min(96vw,1100px);aspect-ratio:16/9;border:3px solid #8c76ff;border-radius:18px;overflow:hidden;box-shadow:0 18px 70px #070a20}
 html.playing,html.playing *{cursor:none !important}
 html.playing #touch-controls,html.playing #touch-controls *{cursor:default !important}
@@ -24,9 +25,9 @@ canvas{width:100%;height:100%;display:block;touch-action:none}
 #help{position:absolute;bottom:14px;left:0;right:0;text-align:center;font-weight:800;text-shadow:0 2px 2px #1d1744;pointer-events:none;font-size:clamp(11px,1.5vw,15px);opacity:0;transition:opacity .25s ease}
 #touch-controls{display:none;position:absolute;inset:0;z-index:4;pointer-events:none}
 #touch-controls.on{display:block}
-#touch-controls .pad{position:absolute;bottom:12px;display:flex;gap:10px;pointer-events:auto}
-#touch-controls .pad-move{left:12px}
-#touch-controls .pad-act{right:12px}
+#touch-controls .pad{position:absolute;bottom:max(12px, env(safe-area-inset-bottom));display:flex;gap:10px;pointer-events:auto}
+#touch-controls .pad-move{left:max(12px, env(safe-area-inset-left))}
+#touch-controls .pad-act{right:max(12px, env(safe-area-inset-right))}
 #touch-controls button{
   margin:0;width:64px;height:64px;border:2px solid #c7b8ffaa;border-radius:18px;
   background:#32268acc;color:#ffe77a;font-family:Fredoka,Nunito,sans-serif;font-size:18px;font-weight:700;
@@ -35,16 +36,11 @@ canvas{width:100%;height:100%;display:block;touch-action:none}
 }
 #touch-controls button:active,#touch-controls button.held{transform:translateY(2px);box-shadow:0 2px 0 #1a1458aa;filter:brightness(1.15);opacity:1}
 #touch-controls button.wide{width:76px;font-size:14px}
-@media (max-width:700px){
-  #touch-controls button{width:58px;height:58px;border-radius:16px;font-size:16px}
-  #touch-controls button.wide{width:68px;font-size:13px}
-  #help{display:none}
-}
 #card{position:absolute;inset:0;display:grid;place-items:center;padding:18px;text-align:center;background:
   radial-gradient(circle at 50% 18%, #ffe7a033 0%, transparent 28%),
   radial-gradient(ellipse at 50% 120%, #3a2a8a88 0%, transparent 55%),
   linear-gradient(180deg, #141a3ef2 0%, #1a1458f0 45%, #0e1638f5 100%);
-  z-index:5}
+  z-index:5;overflow:auto;-webkit-overflow-scrolling:touch}
 #card::before{content:"";position:absolute;inset:0;pointer-events:none;background:
   radial-gradient(1.5px 1.5px at 12% 22%, #fff8 0, transparent 100%),
   radial-gradient(1.5px 1.5px at 78% 18%, #fff6 0, transparent 100%),
@@ -82,6 +78,35 @@ button:hover{transform:translateY(-2px) scale(1.03);filter:brightness(1.05)}
 button:active{transform:translateY(2px);box-shadow:0 2px 0 #c49a2a}
 .panel .hint{margin:12px 0 0;font-size:12px;font-weight:800;color:#b9aeff;letter-spacing:.04em}
 .badge{display:inline-block;margin-top:10px;padding:4px 12px;border-radius:999px;background:#ffe77a22;border:1px solid #ffe77a88;color:#ffe77a;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+@media (max-width:900px), (max-height:700px){
+  body{place-items:stretch;padding:0}
+  #wrap{
+    width:100vw;height:100vh;height:100dvh;max-width:none;aspect-ratio:auto;
+    border:0;border-radius:0;box-shadow:none;background:#070a18
+  }
+  canvas{
+    position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);
+    width:min(100vw, calc(100dvh * 16 / 9));
+    height:min(100dvh, calc(100vw * 9 / 16));
+  }
+  #card{padding:max(12px, env(safe-area-inset-top)) 14px max(12px, env(safe-area-inset-bottom));align-content:center}
+  .panel{width:min(100%,420px);padding:18px 18px 16px;border-radius:20px;box-shadow:0 8px 0 #1a1458}
+  .panel .moon{width:72px;height:72px;top:-16px;right:-10px;opacity:.75}
+  .panel h1{font-size:clamp(28px,11vw,48px)}
+  .panel .lead{margin-top:8px;font-size:14px}
+  .panel .eyebrow{font-size:11px}
+  .stages{margin:10px 0 2px;gap:6px}
+  .stages li{font-size:13px}
+  .panel .stats{margin:12px 0 2px;gap:8px}
+  .panel .stat{min-width:72px;padding:6px 10px}
+  .stars{margin:12px 0 4px}
+  button{margin-top:12px;padding:11px 22px;font-size:15px}
+  .panel .hint{margin-top:10px}
+  #help{display:none}
+  #touch-controls button{width:58px;height:58px;border-radius:16px;font-size:16px}
+  #touch-controls button.wide{width:68px;font-size:13px}
+  #hud{padding:10px 12px;font-size:clamp(10px,2.8vw,14px)}
+}
 @keyframes cardIn{from{opacity:0;transform:translateY(18px) scale(.94)}to{opacity:1;transform:none}}
 @keyframes titlePop{from{opacity:0;transform:scale(.86) rotate(-2deg)}to{opacity:1;transform:none}}
 @keyframes starPop{from{opacity:0;transform:scale(.4) rotate(-20deg)}to{opacity:1;transform:scale(1)}}
