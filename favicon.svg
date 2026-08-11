@@ -1,0 +1,29 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Dragon Dash">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#2a1f6e"/>
+      <stop offset="100%" stop-color="#0e1638"/>
+    </linearGradient>
+    <linearGradient id="moon" x1="0.3" y1="0.2" x2="0.8" y2="1">
+      <stop offset="0%" stop-color="#fff6c8"/>
+      <stop offset="55%" stop-color="#ffe77a"/>
+      <stop offset="100%" stop-color="#d4a84a"/>
+    </linearGradient>
+    <linearGradient id="gem" x1="0.5" y1="0" x2="0.5" y2="1">
+      <stop offset="0%" stop-color="#fff6c2"/>
+      <stop offset="100%" stop-color="#ffd65c"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="url(#sky)"/>
+  <circle cx="38" cy="26" r="16" fill="url(#moon)"/>
+  <circle cx="44" cy="20" r="12" fill="#2a1f6e"/>
+  <!-- tiny Pip silhouette -->
+  <g fill="#c7b8ff">
+    <ellipse cx="22" cy="40" rx="11" ry="8"/>
+    <circle cx="30" cy="34" r="7"/>
+    <path d="M14 38c-4 1-7 4-8 7 4-1 7-1 10 0z"/>
+    <path d="M34 30l6-4-2 6z"/>
+  </g>
+  <circle cx="32" cy="33" r="1.6" fill="#1a1458"/>
+  <path d="M32 48l5 7-5-2-5 2z" fill="url(#gem)"/>
+</svg>
