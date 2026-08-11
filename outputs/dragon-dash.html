@@ -78,6 +78,22 @@ button:hover{transform:translateY(-2px) scale(1.03);filter:brightness(1.05)}
 button:active{transform:translateY(2px);box-shadow:0 2px 0 #c49a2a}
 .panel .hint{margin:12px 0 0;font-size:12px;font-weight:800;color:#b9aeff;letter-spacing:.04em}
 .badge{display:inline-block;margin-top:10px;padding:4px 12px;border-radius:999px;background:#ffe77a22;border:1px solid #ffe77a88;color:#ffe77a;font-size:12px;font-weight:800;letter-spacing:.08em;text-transform:uppercase}
+#rotate{
+  display:none;position:fixed;inset:0;z-index:20;place-items:center;padding:24px;text-align:center;
+  background:linear-gradient(180deg,#141a3ef8,#0e1638f8);color:#efe9ff;font-family:Fredoka,Nunito,sans-serif
+}
+#rotate.on{display:grid}
+#rotate .phone{
+  width:52px;height:86px;margin:0 auto 16px;border:3px solid #c7b8ff;border-radius:10px;
+  box-shadow:0 0 0 2px #32268a;animation:tiltPhone 1.4s ease-in-out infinite
+}
+#rotate h2{margin:0;color:#ffe77a;font-size:clamp(22px,6vw,34px);letter-spacing:.04em;text-shadow:0 3px 0 #b55065}
+#rotate p{margin:10px auto 0;max-width:28ch;color:#d5ccff;font-family:Nunito,system-ui,sans-serif;font-weight:700;line-height:1.35}
+@keyframes tiltPhone{
+  0%,100%{transform:rotate(0deg)}
+  40%{transform:rotate(90deg)}
+  60%{transform:rotate(90deg)}
+}
 @media (max-width:900px), (max-height:700px){
   body{place-items:stretch;padding:0}
   #wrap{
@@ -114,6 +130,13 @@ button:active{transform:translateY(2px);box-shadow:0 2px 0 #c49a2a}
 </style>
 </head>
 <body>
+<div id="rotate" aria-live="polite">
+  <div>
+    <div class="phone" aria-hidden="true"></div>
+    <h2>TURN SIDEWAYS</h2>
+    <p>Dragon Dash plays in landscape. Rotate your phone to continue.</p>
+  </div>
+</div>
 <main id="wrap">
 <canvas id="game" width="1100" height="620"></canvas>
 <div id="hud">
@@ -473,8 +496,40 @@ function bindTouchControls() {
 bindTouchControls();
 if (wantsTouchUi) {
   const hint = document.querySelector('.panel .hint');
-  if (hint) hint.textContent = 'On-screen controls · Jump · Double jump · Fire';
+  if (hint) hint.textContent = 'Rotate to landscape · On-screen controls';
 }
+
+function isPortraitMobile() {
+  return matchMedia('(orientation: portrait)').matches && Math.min(window.innerWidth, window.innerHeight) < 900;
+}
+
+function syncOrientationGate() {
+  const blocked = isPortraitMobile();
+  const el = document.querySelector('#rotate');
+  if (el) el.classList.toggle('on', blocked);
+  if (blocked) {
+    clearTouchPad();
+    setMouseFire(false);
+  }
+  return blocked;
+}
+
+async function tryLockLandscape() {
+  try {
+    if (screen.orientation && screen.orientation.lock) {
+      await screen.orientation.lock('landscape');
+    }
+  } catch (_) {
+    /* browsers often deny lock outside fullscreen */
+  }
+}
+
+addEventListener('orientationchange', () => {
+  syncOrientationGate();
+  if (!isPortraitMobile()) tryLockLandscape();
+});
+addEventListener('resize', syncOrientationGate);
+syncOrientationGate();
 
 function setTouchControlsVisible(on) {
   const el = document.querySelector('#touch-controls');
@@ -663,6 +718,8 @@ function starsHtml(flags) {
 }
 
 function beginPlay() {
+  tryLockLandscape();
+  syncOrientationGate();
   audio ??= new (window.AudioContext || window.webkitAudioContext)();
   audio.resume();
   ensureMusic();
@@ -756,6 +813,7 @@ function update(d) {
   }
   shake = Math.max(0, shake - d * 1.2);
   if (!game) return;
+  if (syncOrientationGate()) return;
 
   const left = K.ArrowLeft || K.KeyA || touchPad.left;
   const right = K.ArrowRight || K.KeyD || touchPad.right;
