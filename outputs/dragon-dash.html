@@ -238,8 +238,8 @@ const STAGES = [
     checkpoints: [{ x: 2320, y: 450 }, { x: 3220, y: 420 }],
     bats: [
       { x: 1920, y: 300, base: 300, v: 1.35, min: 1820, max: 2080, phase: 0 },
-      { x: 2960, y: 280, base: 280, v: -1.55, min: 2840, max: 3120, phase: 2 },
-      { x: 3180, y: 250, base: 250, v: 1.7, min: 3040, max: 3360, phase: 4 }
+      { x: 2920, y: 275, base: 275, v: -1.55, min: 2840, max: 3000, phase: 2 },
+      { x: 3260, y: 245, base: 245, v: 1.7, min: 3120, max: 3380, phase: 4 }
     ],
     foes: [
       { x: 980, y: 498, vx: 1.05, min: 860, max: 1140 },
@@ -448,7 +448,8 @@ function loadStage(index, opts = {}) {
     alive: true,
     armored: !!e.armored,
     hp: e.armored ? 2 : 1,
-    flash: 0
+    flash: 0,
+    face: (e.vx || 1) >= 0 ? 1 : -1
   }));
   slimes = (st.slimes || []).map(s => ({
     x: s.x,
@@ -717,7 +718,8 @@ function update(d) {
 
   movers.forEach(m => {
     m.x += m.v * d;
-    if (m.x < m.min || m.x > m.max) m.v *= -1;
+    if (m.x < m.min) { m.x = m.min; m.v = Math.abs(m.v); }
+    if (m.x > m.max) { m.x = m.max; m.v = -Math.abs(m.v); }
   });
 
   // Crumbling ledges: land → shake → break
@@ -762,7 +764,8 @@ function update(d) {
     if (!b.alive) return;
     b.phase += d * .08;
     b.x += b.v * d;
-    if (b.x < b.min || b.x > b.max) b.v *= -1;
+    if (b.x < b.min) { b.x = b.min; b.v = Math.abs(b.v); }
+    if (b.x > b.max) { b.x = b.max; b.v = -Math.abs(b.v); }
     b.y = b.base + Math.sin(b.phase) * 22;
     if (Math.abs(hero.x - b.x) < 170) b.y += (hero.y - b.y) * .035 * d;
   });
@@ -784,7 +787,8 @@ function update(d) {
     e.anim = (e.anim || 0) + d * .16;
     e.flash = Math.max(0, (e.flash || 0) - d);
     e.x += e.vx * d;
-    if (e.x < e.min || e.x > e.max) e.vx *= -1;
+    if (e.x < e.min) { e.x = e.min; e.vx = Math.abs(e.vx); }
+    if (e.x > e.max) { e.x = e.max; e.vx = -Math.abs(e.vx); }
   });
 
   for (let i = fireballs.length - 1; i >= 0; i--) {
@@ -1579,6 +1583,8 @@ function draw() {
   bats.forEach(b => {
     if (!b.alive) return;
     ctx.save();
+    ctx.shadowBlur = 0;
+    ctx.shadowColor = 'transparent';
     ctx.translate(b.x, b.y);
     ctx.scale(b.v > 0 ? 1 : -1, 1);
     const frame = Math.floor(b.phase * 2) % 4;
@@ -1627,7 +1633,9 @@ function draw() {
     const frame = Math.floor(e.anim || 0) % 4;
     const sourceX = [0, 430, 850, 430][frame];
     ctx.translate(e.x, e.y + 40);
-    ctx.scale(e.vx > 0 ? 1 : -1, 1);
+    // Stable facing from patrol direction (avoid 0 / flicker)
+    ctx.scale((e.vx || e.face || 1) >= 0 ? 1 : -1, 1);
+    e.face = (e.vx || e.face || 1) >= 0 ? 1 : -1;
     ctx.shadowBlur = 0;
     ctx.shadowColor = 'transparent';
     if (e.flash > 0) {
